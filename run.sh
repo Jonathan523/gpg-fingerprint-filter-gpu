@@ -25,7 +25,7 @@ echo "Building and Installing libgcrypt..."
 ./configure > /dev/null 2>&1 && make -j$(nproc) > /dev/null 2>&1 && make install > /dev/null 2>&1 
 cd ..
 echo "Building gpg-fingerprint-filter-gpu..."
-make -j$(nproc)
+make -j$(nproc) > /dev/null 2>&1
 
 SESSION_PREFIX="pgp_"
 for ((i=1; i<=4; i++)); do
