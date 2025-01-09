@@ -10,7 +10,7 @@ echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH" >> ~/.bashr
 source ~/.bashrc
 source /etc/ai_booster enable
 echo "Installing dependencies..."
-apt update && apt install -y screen cron
+apt update && apt install -y screen
 pip install pgpy
 echo "Downloading dependencies..."
 wget -q https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.9.4.tar.gz 
