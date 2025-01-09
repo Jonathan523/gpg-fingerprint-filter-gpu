@@ -3,6 +3,8 @@ if [ "$EUID" -ne 0 ]
   then echo "Please run as root"
   exit
 fi
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 echo "export PATH=/usr/local/cuda/bin:$PATH" >> ~/.bashrc
 echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH" >> ~/.bashrc
 source ~/.bashrc
@@ -25,14 +27,19 @@ echo "Building gpg-fingerprint-filter-gpu..."
 make -j$(nproc)
 
 SESSION_PREFIX="pgp_"
-for ((i=0; i<${#TASKS[@]}; i++)); do
+for ((i=1; i<=4; i++)); do
     SESSION_NAME="${SESSION_PREFIX}${i}"
     TASK="./gpg-fingerprint-filter-gpu -j 34 -a ed25519 -t 59654321 -m Y \"x{10}|x{11}|x{12}|x{13}|x{14}|x{15}|x{16}|x{4}y{8}\" /root/fs/output.pgp"
     screen -dmS "$SESSION_NAME"
-    screen -X stuff "$TASK\n" "$SESSION_NAME"
+    screen -S "$SESSION_NAME" -X stuff "$TASK\n"
     echo "Started task $TASK in screen session $SESSION_NAME"
 done
 
-CRON_ENTRY="* * * * * python $(pwd)/ca.py /root/fs/output.pgp/ /root/fs/dist/ >> /root/fs/log.txt"
-echo "$CRON_ENTRY" | crontab -
-echo "Added cron entry."
+TASK="python $(pwd)/ca.py /root/fs/output.pgp/ /root/fs/dist/ >> /root/fs/log.txt"
+echo "#!/bin/bash" >> ./cron.sh
+echo "while true; do" >> ./cron.sh
+echo "$TASK" >> ./cron.sh
+echo "sleep 5" >> ./cron.sh
+echo "done" >> ./cron.sh
+chmod +x ./cron.sh
+bash ./cron.sh &
