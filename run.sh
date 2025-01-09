@@ -35,7 +35,7 @@ for ((i=1; i<=4; i++)); do
     screen -S "$SESSION_NAME" -X stuff "$TASK\n"
     echo "Started task $TASK in screen session $SESSION_NAME"
 done
-
+sleep 3
 TASK="python $(pwd)/ca.py /root/fs/output.pgp/ /root/fs/dist/ >> /root/fs/log.txt"
 echo "#!/bin/bash" >> ./cron.sh
 echo "while true; do" >> ./cron.sh
