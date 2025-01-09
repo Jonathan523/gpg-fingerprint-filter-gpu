@@ -7,7 +7,7 @@ echo "export PATH=/usr/local/cuda/bin:$PATH" >> ~/.bashrc
 echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH" >> ~/.bashrc
 source ~/.bashrc
 echo "Installing dependencies..."
-apt update && apt install -y screen crontab
+apt update && apt install -y screen cron
 pip install pgpy
 echo "Downloading dependencies..."
 wget -q https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.9.4.tar.gz 
