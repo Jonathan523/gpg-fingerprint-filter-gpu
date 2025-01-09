@@ -8,6 +8,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 echo "export PATH=/usr/local/cuda/bin:$PATH" >> ~/.bashrc
 echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH" >> ~/.bashrc
 source ~/.bashrc
+source /etc/ai_booster enable
 echo "Installing dependencies..."
 apt update && apt install -y screen cron
 pip install pgpy
@@ -39,7 +40,7 @@ TASK="python $(pwd)/ca.py /root/fs/output.pgp/ /root/fs/dist/ >> /root/fs/log.tx
 echo "#!/bin/bash" >> ./cron.sh
 echo "while true; do" >> ./cron.sh
 echo "$TASK" >> ./cron.sh
-echo "sleep 5" >> ./cron.sh
+echo "sleep 1" >> ./cron.sh
 echo "done" >> ./cron.sh
 chmod +x ./cron.sh
 bash ./cron.sh &
