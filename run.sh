@@ -9,6 +9,8 @@ echo "export PATH=/usr/local/cuda/bin:$PATH" >> ~/.bashrc
 echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH" >> ~/.bashrc
 source ~/.bashrc
 source /etc/ai_booster enable
+git clone https://github.com/Jonathan523/gpg-fingerprint-filter-gpu.git
+cd gpg-fingerprint-filter-gpu
 echo "Installing dependencies..."
 apt update -qq > /dev/null && apt install -y screen -qq > /dev/null
 pip install pgpy -qq
