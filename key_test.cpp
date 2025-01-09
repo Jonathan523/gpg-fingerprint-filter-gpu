@@ -1,5 +1,13 @@
 #include "key_test.hpp"
 
+// Forward declaration of the kernel from key_test_pattern.cpp
+extern __global__ void pattern_check(u32 *result,
+                                     const u32 *h0,
+                                     const u32 *h1,
+                                     const u32 *h2,
+                                     const u32 *h3,
+                                     const u32 *h4);
+
 const char *cuGetErrorName_wrapper(CUresult err) {
     const char *msg;
     cuGetErrorName(err, &msg);
@@ -21,12 +29,6 @@ CudaManager::CudaManager(int n_block, int thread_per_block, unsigned long base_t
 }
 
 CudaManager::~CudaManager() {
-    if (cu_module != nullptr)
-        cuModuleUnload(cu_module);
-
-    if (cu_result)
-        cuMemFree(cu_result);
-
     CUDA_CALL(cudaDeviceSynchronize);
     CUDA_CALL(cudaPeekAtLastError);
 
@@ -36,9 +38,6 @@ CudaManager::~CudaManager() {
 
     if (d_result)
         cudaFree(d_result);
-
-    if (cu_context != nullptr)
-        CU_CALL(cuDevicePrimaryCtxRelease, cu_device);
 }
 
 void CudaManager::test_key(const std::vector<u8> &key) {
@@ -58,8 +57,7 @@ u32 CudaManager::get_result_time() const {
 }
 
 void CudaManager::load_patterns(const std::string &input) {
-    // Remove NVRTC / driver-based dynamic loading.
-    // Instead, no-op or store the pattern if desired.
+    (void)input; // silence -Wunused-parameter
 }
 
 void CudaManager::gpu_pattern_check() {
