@@ -9,7 +9,6 @@
 
 #include "error_check.hpp"
 #define CUDA_CALL(func, args...) error_wrapper<cudaError_t>(#func, (func)(args), cudaSuccess, cudaGetErrorString)
-#define CU_CALL(func, args...) error_wrapper<CUresult>(#func, (func)(args), CUDA_SUCCESS, cuGetErrorName_wrapper)
 
 using u32 = std::uint32_t;
 using u8 = std::uint8_t;
@@ -27,11 +26,7 @@ private:
     void gpu_proc_chunk(u32 n_chunk, u32 key_time0) const;
     void gpu_pattern_check();
 
-    CUcontext cu_context = nullptr;
-    CUdevice cu_device;
-    CUmodule cu_module = nullptr;
-    CUfunction cu_kernel = nullptr;
-    CUdeviceptr cu_result = 0;
+    u32 *d_result = nullptr;  // device pointer for results
 
 public:
     CudaManager(int n_block, int thread_per_block, unsigned long base_time);
@@ -45,7 +40,5 @@ public:
     void test_key(const std::vector<u8> &key);
     u32 get_result_time() const;
 };
-
-const char *cuGetErrorName_wrapper(CUresult);
 
 #endif
