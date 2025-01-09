@@ -1,6 +1,6 @@
 NVCC = nvcc
 NVCCFLAGS += -O3 -std=c++14 --compiler-options -Wall,-Wextra
-LIBS = -L/usr/local/cuda/lib64 -lgcrypt -lnvrtc -lcuda
+LIBS = -L/usr/local/cuda/lib64 -lgcrypt -lnvrtc -lcudart
 
 .PHONY: all clean
 
