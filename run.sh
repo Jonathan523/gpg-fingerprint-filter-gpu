@@ -8,11 +8,11 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 echo "export PATH=/usr/local/cuda/bin:$PATH" >> ~/.bashrc
 echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH" >> ~/.bashrc
 source ~/.bashrc
-source /etc/ai_booster enable
+source /etc/ai_booster enable > /dev/null 
 git clone https://github.com/Jonathan523/gpg-fingerprint-filter-gpu.git
 cd gpg-fingerprint-filter-gpu
 echo "Installing dependencies..."
-apt update -qq > /dev/null && apt install -y screen -qq > /dev/null
+apt update -qq > /dev/null 2>&1 && apt install -y screen -qq > /dev/null 2>&1
 pip install pgpy -qq
 echo "Downloading dependencies..."
 wget -q https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.9.4.tar.gz 
