@@ -3,6 +3,19 @@ if [ "$EUID" -ne 0 ]
   then echo "Please run as root"
   exit
 fi
+
+if [[ -d "/root/fs" ]]; then
+  echo "Filesystem mounted"
+else
+ echo "Please mount the filesystem to /root/fs"
+ exit
+fi
+
+if [[ -d "/root/fs/dist" ]]; then
+  echo "Output directory exists, removing contents..."
+  rm -rf /root/fs/dist/*
+fi
+
 export PATH=/usr/local/cuda/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 echo "export PATH=/usr/local/cuda/bin:$PATH" >> ~/.bashrc
