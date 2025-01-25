@@ -27,9 +27,6 @@ cd gpg-fingerprint-filter-gpu
 echo "Installing dependencies..."
 apt update -qq > /dev/null 2>&1 && apt install -y screen -qq > /dev/null 2>&1
 pip install pgpy -qq
-echo "Downloading dependencies..."
-wget -q https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.9.4.tar.gz 
-wget -q https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.51.tar.gz
 tar zxf libgcrypt-1.9.4.tar.gz
 tar zxf libgpg-error-1.51.tar.gz
 cd libgpg-error-1.51
