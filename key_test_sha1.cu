@@ -149,18 +149,17 @@ void sha1_80rounds(u32 w[16], u32 &a, u32 &b, u32 &c, u32 &d, u32 &e)
 
 // ---------------------------------------------------------------------------
 // Template kernel: NCHUNK compile-time chunk count, TPB compile-time block
-// size.  Benefits over the old proc_all_chunks with runtime n_chunk:
+// size.  The compiler can statically unroll `for (int chunk=1; chunk<NCHUNK;
+// ...)` and fold all chunk_buffer[chunk*16+i] into constant offsets.
 //
-//   1. The compiler can statically unroll `for (int chunk=1; chunk<NCHUNK; ...)`
-//      and fold all chunk_buffer[chunk*16+i] into constant offsets.
-//   2. __launch_bounds__(TPB) anchors the register budget to the actual block
-//      size, giving the compiler more room to reduce regs without spilling.
+// No __launch_bounds__ — the profiler should be used to determine whether
+// adding it (and which variant) actually helps on the target GPU; without
+// measurement it is as likely to hurt occupancy as to help.
 //
 // Dispatched for NCHUNK = 1..4 and TPB ∈ {128, 256, 512}.
-// Uncommon values fall through to proc_all_chunks (no __launch_bounds__).
+// Uncommon values fall through to proc_all_chunks (runtime n_chunk).
 // ---------------------------------------------------------------------------
 template<int NCHUNK, int TPB>
-__launch_bounds__(TPB)
 __global__ static
 void proc_chunks(u32 t0,
                  u32* __restrict__ h0, u32* __restrict__ h1,
@@ -295,15 +294,17 @@ u32 CudaManager::load_key(const std::vector<u8> &pubkey) const {
 
     u32 n_chunk = buf_len2 / 64;
 
-    // Always keep chunk_buffer current so proc_chunks / proc_all_chunks are
-    // always ready to run (fixes the previous split where single-chunk keys
-    // only updated key_chunk0 and left chunk_buffer stale).
-    CUDA_CALL(cudaMemcpyToSymbol, chunk_buffer, buf.data(), buf_len2);
-
-    // Additionally update the NVRTC key_chunk0 symbol used by the fused
-    // pattern_check_fused kernel for the single-chunk path.
-    if (n_chunk == 1 && cu_key_chunk0 != 0)
+    if (n_chunk == 1 && cu_key_chunk0 != 0) {
+        // Single-chunk path: only update key_chunk0 (used by pattern_check_fused).
+        // cu_key_chunk0 != 0 means the fused NVRTC kernel is loaded, so test_key()
+        // will route single-chunk keys through gpu_pattern_check_fused(), which reads
+        // exclusively from key_chunk0.  chunk_buffer is not touched on this path,
+        // saving one HtoD copy per key.
         CU_CALL(cuMemcpyHtoD, cu_key_chunk0, buf.data(), 64);
+    } else {
+        // Multi-chunk path: update chunk_buffer (used by proc_chunks / proc_all_chunks).
+        CUDA_CALL(cudaMemcpyToSymbol, chunk_buffer, buf.data(), buf_len2);
+    }
 
     return n_chunk;
 }
