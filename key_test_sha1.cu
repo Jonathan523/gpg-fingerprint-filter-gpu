@@ -9,48 +9,53 @@ __constant__ static u32 chunk_buffer[208];
 
 __forceinline__ __device__ static
 void sha1_main_loop(u32 w[16], u32 &a, u32 &b, u32 &c, u32 &d, u32 &e) {
+    // Rounds 0-15: use w[i] directly, CH function, k = 0x5A827999
 #pragma unroll
-    for (int i=0; i<80; i++) {
-        u32 f, k;
-
-        if (i < 20) {
-            f = d ^ (b & (c ^ d));
-            k = 0x5A827999;
-        } else if (i < 40) {
-            f = b ^ c ^ d;
-            k = 0x6ED9EBA1;
-        } else if (i < 60) {
-            f = (b & c) | (b & d) | (c & d);
-            k = 0x8F1BBCDC;
-        } else {
-            f = b ^ c ^ d;
-            k = 0xCA62C1D6;
-        }
-
-        u32 wi;
-        if (i < 16)
-            wi = w[i];
-        else
-            wi = w[i%16] = LROT32(w[(i-3)%16] ^ w[(i-8)%16] ^ w[(i-14)%16] ^ w[i%16], 1);
-
-        u32 temp = LROT32(a, 5) + f + e + k + wi;
-        e = d;
-        d = c;
-        c = LROT32(b, 30);
-        b = a;
-        a = temp;
+    for (int i = 0; i < 16; i++) {
+        u32 temp = LROT32(a, 5) + (d ^ (b & (c ^ d))) + e + 0x5A827999U + w[i];
+        e = d; d = c; c = LROT32(b, 30); b = a; a = temp;
+    }
+    // Rounds 16-19: w expansion begins, still CH function, k = 0x5A827999
+#pragma unroll
+    for (int i = 16; i < 20; i++) {
+        u32 wi = w[i%16] = LROT32(w[(i-3)%16] ^ w[(i-8)%16] ^ w[(i-14)%16] ^ w[i%16], 1);
+        u32 temp = LROT32(a, 5) + (d ^ (b & (c ^ d))) + e + 0x5A827999U + wi;
+        e = d; d = c; c = LROT32(b, 30); b = a; a = temp;
+    }
+    // Rounds 20-39: PARITY function, k = 0x6ED9EBA1
+#pragma unroll
+    for (int i = 20; i < 40; i++) {
+        u32 wi = w[i%16] = LROT32(w[(i-3)%16] ^ w[(i-8)%16] ^ w[(i-14)%16] ^ w[i%16], 1);
+        u32 temp = LROT32(a, 5) + (b ^ c ^ d) + e + 0x6ED9EBA1U + wi;
+        e = d; d = c; c = LROT32(b, 30); b = a; a = temp;
+    }
+    // Rounds 40-59: MAJ function (simplified: saves one OR vs. original), k = 0x8F1BBCDC
+#pragma unroll
+    for (int i = 40; i < 60; i++) {
+        u32 wi = w[i%16] = LROT32(w[(i-3)%16] ^ w[(i-8)%16] ^ w[(i-14)%16] ^ w[i%16], 1);
+        u32 temp = LROT32(a, 5) + ((b & c) | ((b | c) & d)) + e + 0x8F1BBCDCU + wi;
+        e = d; d = c; c = LROT32(b, 30); b = a; a = temp;
+    }
+    // Rounds 60-79: PARITY function, k = 0xCA62C1D6
+#pragma unroll
+    for (int i = 60; i < 80; i++) {
+        u32 wi = w[i%16] = LROT32(w[(i-3)%16] ^ w[(i-8)%16] ^ w[(i-14)%16] ^ w[i%16], 1);
+        u32 temp = LROT32(a, 5) + (b ^ c ^ d) + e + 0xCA62C1D6U + wi;
+        e = d; d = c; c = LROT32(b, 30); b = a; a = temp;
     }
 }
 
 __global__ static
 void proc_chunk0(u32 t0, u32* __restrict__ h0, u32* __restrict__ h1, u32* __restrict__ h2, u32* __restrict__ h3, u32* __restrict__ h4) {
-    constexpr u32 a0 = 0x67452301;
-    constexpr u32 b0 = 0xEFCDAB89;
-    constexpr u32 c0 = 0x98BADCFE;
-    constexpr u32 d0 = 0x10325476;
-    constexpr u32 e0 = 0xC3D2E1F0;
+    constexpr u32 a0 = 0x67452301U;
+    constexpr u32 b0 = 0xEFCDAB89U;
+    constexpr u32 c0 = 0x98BADCFEU;
+    constexpr u32 d0 = 0x10325476U;
+    constexpr u32 e0 = 0xC3D2E1F0U;
 
-    size_t index = blockIdx.x * blockDim.x + threadIdx.x;
+    // u32 index is safe: total threads = n_block * thread_per_block = time_offset,
+    // which is bounded well below UINT32_MAX by the int batch_size in the constructor.
+    u32 index = blockIdx.x * blockDim.x + threadIdx.x;
     u32 a, b, c, d, e;
 
     u32 w[16];
@@ -73,8 +78,8 @@ void proc_chunk0(u32 t0, u32* __restrict__ h0, u32* __restrict__ h1, u32* __rest
 }
 
 __global__ static
-void proc_chunk(size_t chunk_idx, u32 *h0, u32 *h1, u32 *h2, u32 *h3, u32 *h4) {
-    size_t index = blockIdx.x * blockDim.x + threadIdx.x;
+void proc_chunk(u32 chunk_idx, u32 *h0, u32 *h1, u32 *h2, u32 *h3, u32 *h4) {
+    u32 index = blockIdx.x * blockDim.x + threadIdx.x;
     u32 a, b, c, d, e;
 
     u32 w[16];
@@ -125,7 +130,15 @@ u32 CudaManager::load_key(const std::vector<u8> &pubkey) const {
     }
 
     DIE_ON_ERR(sizeof(chunk_buffer) >= buf_len2);
-    CUDA_CALL(cudaMemcpyToSymbol, chunk_buffer, buf.data(), buf_len2);  
 
-    return buf_len2 / 64;
+    u32 n_chunk = buf_len2 / 64;
+    if (n_chunk == 1 && cu_key_chunk0 != 0) {
+        // Single-chunk path: upload key block directly to NVRTC constant memory used
+        // by the fused kernel; avoids the heavier cudaMemcpyToSymbol call.
+        CU_CALL(cuMemcpyHtoD, cu_key_chunk0, buf.data(), 64);
+    } else {
+        CUDA_CALL(cudaMemcpyToSymbol, chunk_buffer, buf.data(), buf_len2);
+    }
+
+    return n_chunk;
 }
