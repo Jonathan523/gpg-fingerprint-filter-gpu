@@ -118,7 +118,7 @@ static void gen_nibble_extract(std::stringstream &ss,
     }
 }
 
-static std::string compile_patterns(const std::string &input) {
+static std::string compile_patterns(const std::string &input, int tpb) {
     // --- Parse all sub-patterns and build the combined boolean condition ---
     std::vector<std::string> pattern_codes;
     std::string buffer = input + "|";
@@ -144,9 +144,9 @@ static std::string compile_patterns(const std::string &input) {
 
     // Common type definitions and helper macros
     ss << "typedef unsigned int u32;\n";
-    // Inline function instead of a macro: cleaner dependency information for
-    // the compiler and easier to swap in a PTX intrinsic if desired.
-    ss << "__device__ __forceinline__ static u32 rotl32(u32 x, int n) { return (x << n) | (x >> (32 - n)); }\n\n";
+    // Use __funnelshift_l so NVRTC emits a single SHF.L.WRAP instruction,
+    // matching the compiled CUDA path in key_test_sha1.cu.
+    ss << "__device__ __forceinline__ static u32 rotl32(u32 x, int n) { return __funnelshift_l(x, x, n); }\n\n";
 
     // Constant memory for key data — used exclusively by the fused kernel.
     // The host writes one padded SHA-1 block (64 bytes / 16 u32 words) here
@@ -208,7 +208,8 @@ static std::string compile_patterns(const std::string &input) {
 
     // --- Kernel 1: pattern_check (multi-chunk path) ---
     // Reads the final SHA-1 state from global-memory arrays h0..h4.
-    ss << "extern \"C\" __global__\n";
+    // __launch_bounds__ anchors register allocation to the actual block size.
+    ss << "extern \"C\" __launch_bounds__(" << tpb << ") __global__\n";
     ss << "void pattern_check(u32 *result";
     for (int i = 0; i < 5; i++)
         ss << ", const u32* __restrict__ h" << i;
@@ -227,7 +228,8 @@ static std::string compile_patterns(const std::string &input) {
     // Computes SHA-1 inline from key_chunk0 constant memory, keeping the full
     // hash state (a,b,c,d,e) in registers.  No global-memory write/read of
     // h[0-4] means ~40 bytes * n_threads less global-memory traffic per call.
-    ss << "extern \"C\" __global__\n";
+    // __launch_bounds__ anchors register allocation to the actual block size.
+    ss << "extern \"C\" __launch_bounds__(" << tpb << ") __global__\n";
     ss << "void pattern_check_fused(u32 *result, u32 t0) {\n";
     ss << "  constexpr u32 a0 = 0x67452301U;\n";
     ss << "  constexpr u32 b0 = 0xEFCDAB89U;\n";
@@ -259,7 +261,7 @@ static std::string compile_patterns(const std::string &input) {
 }
 
 void CudaManager::load_patterns(const std::string &input) {
-    auto cuda_src = compile_patterns(input);
+    auto cuda_src = compile_patterns(input, thread_per_block_);
 
     nvrtcProgram prog;
     NVRTC_CALL(nvrtcCreateProgram, &prog, cuda_src.c_str(), NULL, 0, NULL, NULL);
