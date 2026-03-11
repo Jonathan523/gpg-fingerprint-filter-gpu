@@ -39,8 +39,14 @@ void CudaManager::test_key(const std::vector<u8> &key) {
     auto n_chunk = load_key(key);
     key_time0 = base_time_;
 
-    gpu_proc_chunk(n_chunk, key_time0);
-    gpu_pattern_check();
+    if (n_chunk == 1 && cu_kernel_fused != nullptr) {
+        // Fused path: SHA-1 and pattern check run in a single kernel, keeping
+        // the intermediate hash state in registers and never touching global memory.
+        gpu_pattern_check_fused(key_time0);
+    } else {
+        gpu_proc_chunk(n_chunk, key_time0);
+        gpu_pattern_check();
+    }
 }
 
 u32 CudaManager::get_result_time() const {

@@ -26,12 +26,15 @@ private:
     u32 load_key(const std::vector<u8> &pubkey) const;
     void gpu_proc_chunk(u32 n_chunk, u32 key_time0) const;
     void gpu_pattern_check();
+    void gpu_pattern_check_fused(u32 t0);
 
     CUcontext cu_context = nullptr;
     CUdevice cu_device;
     CUmodule cu_module = nullptr;
     CUfunction cu_kernel = nullptr;
+    CUfunction cu_kernel_fused = nullptr;
     CUdeviceptr cu_result = 0;
+    CUdeviceptr cu_key_chunk0 = 0;
 
 public:
     CudaManager(int n_block, int thread_per_block, unsigned long base_time);
