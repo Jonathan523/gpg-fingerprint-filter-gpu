@@ -144,7 +144,9 @@ static std::string compile_patterns(const std::string &input) {
 
     // Common type definitions and helper macros
     ss << "typedef unsigned int u32;\n";
-    ss << "#define LROT32(x, n) (((x)<<(n))|((x)>>(32-(n))))\n\n";
+    // Inline function instead of a macro: cleaner dependency information for
+    // the compiler and easier to swap in a PTX intrinsic if desired.
+    ss << "__device__ __forceinline__ static u32 rotl32(u32 x, int n) { return (x << n) | (x >> (32 - n)); }\n\n";
 
     // Constant memory for key data — used exclusively by the fused kernel.
     // The host writes one padded SHA-1 block (64 bytes / 16 u32 words) here
@@ -156,41 +158,51 @@ static std::string compile_patterns(const std::string &input) {
     // function and constant — the compiler can inline everything with zero
     // branches after unrolling.  The MAJ function is written as
     // (b&c)|((b|c)&d) rather than (b&c)|(b&d)|(c&d) to save one OR per round.
+    // &15 replaces %16 throughout; the read and write of s[j] are split to give
+    // the compiler unambiguous data-flow for the rolling message schedule.
     ss << "__forceinline__ __device__ static\n";
     ss << "void sha1_80rounds(u32 s[16], u32 &a, u32 &b, u32 &c, u32 &d, u32 &e) {\n";
     // Rounds 0-15: direct s[i], CH function
     ss << "    #pragma unroll\n";
     ss << "    for (int i = 0; i < 16; i++) {\n";
-    ss << "        u32 temp = LROT32(a,5)+(d^(b&(c^d)))+e+0x5A827999U+s[i];\n";
-    ss << "        e=d; d=c; c=LROT32(b,30); b=a; a=temp;\n";
+    ss << "        u32 temp = rotl32(a,5)+(d^(b&(c^d)))+e+0x5A827999U+s[i];\n";
+    ss << "        e=d; d=c; c=rotl32(b,30); b=a; a=temp;\n";
     ss << "    }\n";
     // Rounds 16-19: w expansion starts, still CH function
     ss << "    #pragma unroll\n";
     ss << "    for (int i = 16; i < 20; i++) {\n";
-    ss << "        u32 wi=s[i%16]=LROT32(s[(i-3)%16]^s[(i-8)%16]^s[(i-14)%16]^s[i%16],1);\n";
-    ss << "        u32 temp = LROT32(a,5)+(d^(b&(c^d)))+e+0x5A827999U+wi;\n";
-    ss << "        e=d; d=c; c=LROT32(b,30); b=a; a=temp;\n";
+    ss << "        int j=i&15;\n";
+    ss << "        u32 x=s[(i-3)&15]^s[(i-8)&15]^s[(i-14)&15]^s[j];\n";
+    ss << "        u32 wi=rotl32(x,1); s[j]=wi;\n";
+    ss << "        u32 temp=rotl32(a,5)+(d^(b&(c^d)))+e+0x5A827999U+wi;\n";
+    ss << "        e=d; d=c; c=rotl32(b,30); b=a; a=temp;\n";
     ss << "    }\n";
     // Rounds 20-39: PARITY function
     ss << "    #pragma unroll\n";
     ss << "    for (int i = 20; i < 40; i++) {\n";
-    ss << "        u32 wi=s[i%16]=LROT32(s[(i-3)%16]^s[(i-8)%16]^s[(i-14)%16]^s[i%16],1);\n";
-    ss << "        u32 temp = LROT32(a,5)+(b^c^d)+e+0x6ED9EBA1U+wi;\n";
-    ss << "        e=d; d=c; c=LROT32(b,30); b=a; a=temp;\n";
+    ss << "        int j=i&15;\n";
+    ss << "        u32 x=s[(i-3)&15]^s[(i-8)&15]^s[(i-14)&15]^s[j];\n";
+    ss << "        u32 wi=rotl32(x,1); s[j]=wi;\n";
+    ss << "        u32 temp=rotl32(a,5)+(b^c^d)+e+0x6ED9EBA1U+wi;\n";
+    ss << "        e=d; d=c; c=rotl32(b,30); b=a; a=temp;\n";
     ss << "    }\n";
     // Rounds 40-59: MAJ function (simplified)
     ss << "    #pragma unroll\n";
     ss << "    for (int i = 40; i < 60; i++) {\n";
-    ss << "        u32 wi=s[i%16]=LROT32(s[(i-3)%16]^s[(i-8)%16]^s[(i-14)%16]^s[i%16],1);\n";
-    ss << "        u32 temp = LROT32(a,5)+((b&c)|((b|c)&d))+e+0x8F1BBCDCU+wi;\n";
-    ss << "        e=d; d=c; c=LROT32(b,30); b=a; a=temp;\n";
+    ss << "        int j=i&15;\n";
+    ss << "        u32 x=s[(i-3)&15]^s[(i-8)&15]^s[(i-14)&15]^s[j];\n";
+    ss << "        u32 wi=rotl32(x,1); s[j]=wi;\n";
+    ss << "        u32 temp=rotl32(a,5)+((b&c)|((b|c)&d))+e+0x8F1BBCDCU+wi;\n";
+    ss << "        e=d; d=c; c=rotl32(b,30); b=a; a=temp;\n";
     ss << "    }\n";
     // Rounds 60-79: PARITY function
     ss << "    #pragma unroll\n";
     ss << "    for (int i = 60; i < 80; i++) {\n";
-    ss << "        u32 wi=s[i%16]=LROT32(s[(i-3)%16]^s[(i-8)%16]^s[(i-14)%16]^s[i%16],1);\n";
-    ss << "        u32 temp = LROT32(a,5)+(b^c^d)+e+0xCA62C1D6U+wi;\n";
-    ss << "        e=d; d=c; c=LROT32(b,30); b=a; a=temp;\n";
+    ss << "        int j=i&15;\n";
+    ss << "        u32 x=s[(i-3)&15]^s[(i-8)&15]^s[(i-14)&15]^s[j];\n";
+    ss << "        u32 wi=rotl32(x,1); s[j]=wi;\n";
+    ss << "        u32 temp=rotl32(a,5)+(b^c^d)+e+0xCA62C1D6U+wi;\n";
+    ss << "        e=d; d=c; c=rotl32(b,30); b=a; a=temp;\n";
     ss << "    }\n";
     ss << "}\n\n";
 
@@ -229,7 +241,7 @@ static std::string compile_patterns(const std::string &input) {
     // s[1] holds the 4-byte creation timestamp (bytes 4-7 of the OpenPGP
     // fingerprint hash packet, byte-swapped to little-endian u32 by load_key).
     // Each thread tests a different timestamp: t0 is the base and index is the
-    // offset subtracted from it, matching the convention in proc_chunk0.
+    // offset subtracted from it, matching the convention in proc_all_chunks.
     ss << "  s[1] = t0 - index;\n";
     ss << "  u32 a = a0, b = b0, c = c0, d = d0, e = e0;\n";
     ss << "  sha1_80rounds(s, a, b, c, d, e);\n";
